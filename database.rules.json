@@ -1,0 +1,22 @@
+{
+  /* Visit https://firebase.google.com/docs/database/security to learn more about security rules. */
+  "rules": {
+    "shops": {
+      ".read": true,
+      ".write": true
+      // "$shopId": {
+      // ".write": "$shopId === auth.uid"
+      // }
+    },
+    "orders": {
+      ".read": true,
+      ".write": true
+    },
+    "users": {
+      ".read": true,
+      "$uid": {
+        ".write": "$uid === auth.uid"
+      }
+    }
+  }
+}
