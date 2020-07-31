@@ -3,9 +3,17 @@ const SKU_STATUS = {
   OUT_OF_STOCK: "out_of_stock",
 }
 
-function createSku(productId, attributes, price, currency, status, ctx) {
-  return new Promise(resolve =>
-    ctx.stripe.skus.create(
+function createSku(
+  ctx,
+  stripeAccount,
+  productId,
+  attributes,
+  price,
+  currency,
+  status
+) {
+  return ctx.stripe.skus
+    .create(
       {
         attributes,
         price,
@@ -13,32 +21,35 @@ function createSku(productId, attributes, price, currency, status, ctx) {
         inventory: { type: "bucket", value: status },
         product: productId,
       },
-      (err, sku) => resolve([sku, err])
+      { stripeAccount }
     )
-  )
+    .then(sku => [sku, null])
+    .catch(err => [null, err])
 }
 
-function listSkus(ctx) {
-  return new Promise(resolve =>
-    ctx.stripe.skus.list(
+function listSkus(ctx, stripeAccount) {
+  return ctx.stripe.skus
+    .list(
       {
         active: true,
         expand: ["data.product"],
       },
-      (err, product) => resolve([product.data, err])
+      { stripeAccount }
     )
-  )
+    .then(skus => [skus.data, null])
+    .catch(err => [null, err])
 }
 
-function getSku(id, ctx) {
-  return new Promise(resolve => {
-    ctx.stripe.sku.retrieve(id, (err, sku) => resolve([sku, err]))
-  })
+function getSku(ctx, stripeAccount, id) {
+  return ctx.stripe.sku
+    .retrieve(id, { stripeAccount })
+    .then(sku => [sku, null])
+    .catch(err => [null, err])
 }
 
-function updateSku(id, price, status, ctx) {
-  return new Promise(resolve =>
-    ctx.stripe.skus.update(
+function updateSku(ctx, stripeAccount, id, price, status) {
+  return ctx.stripe.skus
+    .update(
       id,
       {
         price,
@@ -46,17 +57,14 @@ function updateSku(id, price, status, ctx) {
           value: status,
         },
       },
-      (err, sku) => resolve([sku, err])
+      { stripeAccount }
     )
-  )
+    .then(sku => [sku, null])
+    .catch(err => [null, err])
 }
 
-function deleteSku(id, ctx) {
-  return new Promise(resolve =>
-    ctx.stripe.skus.del(id, function (err) {
-      resolve(err.statusCode)
-    })
-  )
+function deleteSku(ctx, stripeAccount, id) {
+  return ctx.stripe.skus.del(id, { stripeAccount }).catch(err => err.statusCode)
 }
 
 module.exports = {

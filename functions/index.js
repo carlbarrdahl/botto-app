@@ -149,9 +149,11 @@ app.get("/products/:id", async (req, res) => {
   res.status(STATUS_CODES.OK).send(product)
 })
 app.post("/products", async (req, res) => {
+  const connectedAccountId = grabConnectedAccount(req)
   const [newProduct, err] = await createProduct(
+    context,
     productFactory().init(req.body),
-    context
+    connectedAccountId
   )
 
   if (err)
@@ -171,9 +173,10 @@ app.delete("/products/:id", async (req, res) => {
   res.sendStatus(STATUS_CODES.OK)
 })
 
+const grabConnectedAccount = req => req.headers["x-account"]
 // Sku (Stripe) endpoints
 app.get("/skus", async (req, res) => {
-  const [skus, err] = await listSkus(context)
+  const [skus, err] = await listSkus(context, grabConnectedAccount(req))
 
   if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
 
@@ -184,7 +187,7 @@ app.get("/skus/:id", async (req, res) => {
 
   if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
 
-  const [sku, err] = await getSku(id, context)
+  const [sku, err] = await getSku(context, grabConnectedAccount(req), id)
 
   if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
 
@@ -194,12 +197,13 @@ app.post("/skus", async (req, res) => {
   const { productId, attributes, price } = req.body
 
   const [sku, err] = await createSku(
+    context,
+    grabConnectedAccount(req),
     productId,
     attributes,
     price,
     "sek",
-    SKU_STATUS.IN_STOCK,
-    context
+    SKU_STATUS.IN_STOCK
   )
 
   if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
@@ -212,7 +216,13 @@ app.put("/skus/:id", async (req, res) => {
 
   if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
 
-  const [sku, err] = await updateSku(id, price, status, context)
+  const [sku, err] = await updateSku(
+    context,
+    grabConnectedAccount(req),
+    id,
+    price,
+    status
+  )
 
   if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
 
@@ -223,7 +233,7 @@ app.delete("/skus/:id", async (req, res) => {
 
   if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
 
-  const errStatus = await deleteSku(id, context)
+  const errStatus = await deleteSku(context, grabConnectedAccount(req), id)
 
   if (errStatus)
     return res.sendStatus(errStatus || STATUS_CODES.INTERNAL_SERVER_ERROR)

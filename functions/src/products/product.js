@@ -25,64 +25,65 @@ function productFactory() {
 
 /**
  * Creates a new product, passed object should be constructed using the productFactory.
- *
+ 
  * @param {*} product
- * @param {*} ctx
+ * @param {*} account
  * @returns
  */
-function createProduct(product, ctx) {
-  return new Promise(resolve => {
-    ctx.stripe.products.create(product, (err, product) =>
-      resolve([product, err])
-    )
-  })
+function createProduct(ctx, product, account) {
+  return ctx.stripe.products
+    .create(product, { stripeAccount: account })
+    .then(data => [data, null])
+    .catch(err => [null, err])
 }
-
 /**
  * Fetches active=bool products marked as goods.
- *
- * @param {boolean} [active=true]
+ 
  * @param {*} ctx
+ * @param {*} stripeAccount
+ * @param {boolean} [active=true]
  * @returns
  */
-function getProducts(active = true, ctx) {
-  return new Promise(resolve => {
-    ctx.stripe.products.list(
+function getProducts(ctx, stripeAccount, active = true) {
+  return ctx.stripe.products
+    .list(
       {
         active,
         type: "good",
       },
-      (err, products) => resolve([products.data, err])
+      { stripeAccount }
     )
-  })
+    .then(products => [products.data, null])
+    .catch(err => [null, err])
 }
 
 /**
  * Retrieves a specific product by ID.
  *
- * @param {*} productId
  * @param {*} ctx
+ * @param {*} stripeAccount
+ * @param {*} id
  * @returns
  */
-function getProduct(productId, ctx) {
-  return new Promise(resolve => {
-    ctx.stripe.products.retrieve(productId, (err, product) =>
-      resolve([product, err])
-    )
-  })
+function getProduct(ctx, stripeAccount, id) {
+  return ctx.stripe.products
+    .retrieve(id, { stripeAccount })
+    .then(data => [data, null])
+    .catch(err => [null, err])
 }
 
 /**
  * Removes product by ID
  *
- * @param {*} productId
  * @param {*} ctx
+ * @param {*} stripeAccount
+ * @param {*} id
  * @returns
  */
-function deleteProduct(productId, ctx) {
-  return new Promise(resolve => {
-    ctx.stripe.products.del(productId, err => resolve(err))
-  })
+function deleteProduct(ctx, stripeAccount, id) {
+  return ctx.stripe.products
+    .del(id, { stripeAccount })
+    .catch(err => [null, err.statusCode])
 }
 
 module.exports = {

@@ -1,19 +1,15 @@
+const { listSkus } = require("../sku")
+
 module.exports = async ({ user }, ctx) => {
-  const userRef = await ctx.db
+  const { stripeAccount } = await ctx.db
     .ref(`users/${user.uid}`)
     .once("value")
     .then(snap => snap.val())
 
-  if (!userRef) return
+  const skus = await listSkus(context, stripeAccount)
+  const data = skus.filter(sku => sku.product.active)
 
-  const { stripeAccount } = userRef
+  ctx.db.ref(`shops/${stripeAccount}/skus`).set(data)
 
-  return ctx.stripe.skus
-    .list({ active: true, expand: ["data.product"] }, { stripeAccount })
-    .then(({ data }) => {
-      data = data.filter(sku => sku.product.active)
-      ctx.db.ref(`shops/${stripeAccount}/skus`).set(data)
-
-      return data
-    })
+  return data
 }
