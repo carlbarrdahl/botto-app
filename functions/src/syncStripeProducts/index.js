@@ -11,7 +11,7 @@ module.exports = async ({ user }, ctx) => {
   return ctx.stripe.skus
     .list({ active: true, expand: ["data.product"] }, { stripeAccount })
     .then(({ data }) => {
-      data = data.filter(sku => sku.product)
+      data = data.filter(sku => sku.product.active)
       ctx.db.ref(`shops/${stripeAccount}/skus`).set(data)
 
       return data
