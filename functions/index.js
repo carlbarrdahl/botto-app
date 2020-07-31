@@ -3,6 +3,7 @@ const functions = require("firebase-functions")
 const config = require("./config")
 const context = require("./context")
 
+const STATUS_CODES = require("./src/utils/STATUS_CODES")
 const connectStripe = require("./src/connectStripe")
 const placeOrder = require("./src/placeOrder")
 const payOrder = require("./src/payOrder")
@@ -16,7 +17,14 @@ const {
   getProducts,
   deleteProduct,
 } = require("./src/products")
-const STATUS_CODES = require("./src/utils/STATUS_CODES")
+const {
+  createSku,
+  listSkus,
+  updateSku,
+  deleteSku,
+  getSku,
+  SKU_STATUS,
+} = require("./src/sku")
 
 const app = require("express")()
 
@@ -161,6 +169,66 @@ app.delete("/products/:id", async (req, res) => {
   }
 
   res.sendStatus(STATUS_CODES.OK)
+})
+
+// Sku (Stripe) endpoints
+app.get("/skus", async (req, res) => {
+  const [skus, err] = await listSkus(context)
+
+  if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  return res.status(STATUS_CODES.OK).send(skus)
+})
+app.get("/skus/:id", async (req, res) => {
+  const { id } = req.params
+
+  if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  const [sku, err] = await getSku(id, context)
+
+  if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  return res.status(STATUS_CODES.OK).send(sku)
+})
+app.post("/skus", async (req, res) => {
+  const { productId, attributes, price } = req.body
+
+  const [sku, err] = await createSku(
+    productId,
+    attributes,
+    price,
+    "sek",
+    SKU_STATUS.IN_STOCK,
+    context
+  )
+
+  if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  return res.status(STATUS_CODES.CREATED).send(sku)
+})
+app.put("/skus/:id", async (req, res) => {
+  const { id } = req.params
+  const { price, status } = req.body
+
+  if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  const [sku, err] = await updateSku(id, price, status, context)
+
+  if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  return res.status(STATUS_CODES.ACCEPTED).send(sku)
+})
+app.delete("/skus/:id", async (req, res) => {
+  const { id } = req.params
+
+  if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  const errStatus = await deleteSku(id, context)
+
+  if (errStatus)
+    return res.sendStatus(errStatus || STATUS_CODES.INTERNAL_SERVER_ERROR)
+
+  return res.sendStatus(STATUS_CODES.ACCEPTED)
 })
 
 exports.api = functions.region("europe-west1").https.onRequest(app)
