@@ -9,6 +9,7 @@ const payOrder = require("./src/payOrder")
 const pollPayment = require("./src/pollPayment")
 const syncStripeProducts = require("./src/syncStripeProducts")
 const stripeWebhook = require("./src/stripeWebhook")
+const { createProduct, productFactory } = require("./src/products")
 const STATUS_CODES = require("./src/utils/STATUS_CODES")
 
 const app = require("express")()
@@ -113,6 +114,18 @@ app.get("/status", (_, res) => {
   return res
     .status(STATUS_CODES.ACCEPTED)
     .send({ message: "OK", executed: new Date().toISOString() })
+})
+
+app.post("/product", async (req, res) => {
+  const [newProduct, err] = await createProduct(
+    productFactory().init(req.body),
+    context
+  )
+
+  if (err)
+    return res.status(STATUS_CODES.BAD_REQUEST).send({ error: err.message })
+
+  return res.status(STATUS_CODES.CREATED).send(newProduct)
 })
 
 exports.api = functions.region("europe-west1").https.onRequest(app)
