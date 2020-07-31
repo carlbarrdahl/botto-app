@@ -4,12 +4,13 @@ const { context } = require("../../test/utils")
 describe("sku", () => {
   test("create sku", async () => {
     const [sku] = await createSku(
+      context,
+      "a-connected-stripe-acc",
       "product-id",
       { meta: "attr" },
       15,
       "sek",
-      "in_stock",
-      context
+      "in_stock"
     )
 
     expect(sku.id).toEqual("sku_id")

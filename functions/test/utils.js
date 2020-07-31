@@ -57,9 +57,7 @@ const context = {
     },
     skus: {
       list: jest.fn().mockResolvedValue({ data: values.skus }),
-      create: (_, cb) => {
-        return cb("err", values.skus[0])
-      },
+      create: jest.fn().mockResolvedValue(values.skus[0], null),
     },
     oauth: {
       token: jest.fn().mockResolvedValue(values.stripe),
