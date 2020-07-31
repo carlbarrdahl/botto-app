@@ -42,7 +42,6 @@ const context = {
         once: jest.fn().mockResolvedValue({
           val: () => {
             const [type] = path.split("/")
-            console.log(type)
             return values[type]
           },
         }),
@@ -58,6 +57,9 @@ const context = {
     },
     skus: {
       list: jest.fn().mockResolvedValue({ data: values.skus }),
+      create: (_, cb) => {
+        return cb("err", values.skus[0])
+      },
     },
     oauth: {
       token: jest.fn().mockResolvedValue(values.stripe),
