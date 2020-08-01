@@ -58,6 +58,10 @@ const context = {
     skus: {
       list: jest.fn().mockResolvedValue({ data: values.skus }),
       create: jest.fn().mockResolvedValue(values.skus[0], null),
+      retrieve: jest.fn().mockResolvedValue(values.skus[0], null),
+      del: jest.fn().mockResolvedValue(null),
+      update: (id, sku, account) =>
+        Promise.resolve({ ...values.skus[0], ...sku }),
     },
     oauth: {
       token: jest.fn().mockResolvedValue(values.stripe),

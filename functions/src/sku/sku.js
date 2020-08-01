@@ -41,7 +41,7 @@ function listSkus(ctx, stripeAccount) {
 }
 
 function getSku(ctx, stripeAccount, id) {
-  return ctx.stripe.sku
+  return ctx.stripe.skus
     .retrieve(id, { stripeAccount })
     .then(sku => [sku, null])
     .catch(err => [null, err])
