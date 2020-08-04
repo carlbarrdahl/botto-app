@@ -1,5 +1,3 @@
-const product = require(".")
-
 const Product = {
   name: "",
   description: "",
@@ -8,19 +6,17 @@ const Product = {
   caption: "", // A short one-line description of the product
   images: [], // optional A list of up to 8 URLs of images for this product
   statement_descriptor: "", // An arbitrary string to be displayed on your customer’s credit card or bank statement.
-  type: "service",
-
-  init({ name, description }) {
-    this.name = name
-    this.description = description
-    this.type = "good"
-
-    return this
-  },
+  type: "good",
 }
 
-function productFactory() {
-  return Object.create(Product)
+function productFactory(config) {
+  return Object.assign(
+    {},
+    {
+      ...Product,
+      ...config,
+    }
+  )
 }
 
 /**
@@ -83,6 +79,7 @@ function getProduct(ctx, stripeAccount, id) {
 function deleteProduct(ctx, stripeAccount, id) {
   return ctx.stripe.products
     .del(id, { stripeAccount })
+    .then(res => [res.deleted, null])
     .catch(err => [null, err.statusCode])
 }
 
