@@ -3,22 +3,40 @@ const functions = require("firebase-functions")
 const config = require("./config")
 const context = require("./context")
 
+const STATUS_CODES = require("./src/utils/STATUS_CODES")
 const connectStripe = require("./src/connectStripe")
 const placeOrder = require("./src/placeOrder")
 const payOrder = require("./src/payOrder")
 const pollPayment = require("./src/pollPayment")
 const syncStripeProducts = require("./src/syncStripeProducts")
 const stripeWebhook = require("./src/stripeWebhook")
+const {
+  createProduct,
+  productFactory,
+  getProduct,
+  getProducts,
+  deleteProduct,
+} = require("./src/products")
+const {
+  createSku,
+  listSkus,
+  updateSku,
+  deleteSku,
+  getSku,
+  SKU_STATUS,
+} = require("./src/sku")
 
 const app = require("express")()
 
 app.use(require("cors")({ origin: config.baseUrl }))
 app.use(require("express-pino-logger")())
 
-async function authMiddleware(req, res, next) {
+async function authMiddleware(req, _, next) {
   try {
     const token = (req.headers.authorization || "").split("Bearer ")[1]
+
     req.user = await context.auth.verifyIdToken(token)
+
     next()
   } catch (error) {
     next(error)
@@ -28,51 +46,65 @@ async function authMiddleware(req, res, next) {
 // Create Shop by connecting Stripe
 app.post("/connectStripe", authMiddleware, async (req, res) => {
   req.log.info("Connecting Stripe")
+
   const { code, state } = req.query
+
   return connectStripe({ code, state, user: req.user }, context)
-    .then(() => res.status(200).send({ success: true }))
+    .then(() => res.status(STATUS_CODES.ACCEPTED).send({ success: true }))
     .catch(err =>
-      res.status(err.statusCode || 500).send({ error: err.message })
+      res
+        .status(err.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR)
+        .send({ error: err.message })
     )
 })
 
 // Add Stripe products to database
 app.post("/syncProducts", authMiddleware, async (req, res) => {
   req.log.info("Syncing Stripe products")
+
   return syncStripeProducts({ user: req.user }, context)
-    .then(data => res.status(200).send(data))
+    .then(data => res.status(STATUS_CODES.CREATED).send(data))
     .catch(err =>
-      res.status(err.statusCode || 500).send({ error: err.message })
+      res
+        .status(err.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR)
+        .send({ error: err.message })
     )
 })
 
-// Create order
+// Payment endpoints
 app.post("/placeOrder", authMiddleware, async (req, res) => {
   req.log.info("Placing order")
   const { lineItems, stripeAccount } = req.body
   return placeOrder({ lineItems, stripeAccount, user: req.user }, context)
-    .then(order => res.status(201).send(order))
+    .then(order => res.status(STATUS_CODES.CREATED).send(order))
     .catch(err =>
-      res.status(err.statusCode || 500).send({ error: err.message })
+      res
+        .status(err.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR)
+        .send({ error: err.message })
     )
 })
-// Create Stripe checkout session
 app.post("/payOrder", authMiddleware, async (req, res) => {
   req.log.info("Pay order")
+
   const { orderId } = req.body
+
   return payOrder({ orderId, user: req.user }, context)
-    .then(session => res.status(201).send(session))
+    .then(session => res.status(STATUS_CODES.CREATED).send(session))
     .catch(err =>
-      res.status(err.statusCode || 500).send({ error: err.message })
+      res
+        .status(err.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR)
+        .send({ error: err.message })
     )
 })
-
 app.post("/pollPayment", authMiddleware, async (req, res) => {
   req.log.info("Poll payment")
+
   return pollPayment(req.body, context)
-    .then(() => res.status(200).send({ status: "ok" }))
+    .then(() => res.status(STATUS_CODES.CREATED).send({ status: "ok" }))
     .catch(err =>
-      res.status(err.statusCode || 500).send({ error: err.message })
+      res
+        .status(err.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR)
+        .send({ error: err.message })
     )
 })
 
@@ -86,9 +118,128 @@ app.post(
       context
     )
       .then(() => res.json({ received: true }))
-      .catch(err => res.status(400).send(err.message))
+      .catch(err => res.status(STATUS_CODES.BAD_REQUEST).send(err.message))
   }
 )
+
+// Sys status endpoints
+app.get("/status", (_, res) => {
+  return res
+    .status(STATUS_CODES.OK)
+    .send({ message: "OK", executed: new Date().toISOString() })
+})
+
+// Product (Stripe) endpoints
+app.get("/products", async (_, res) => {
+  const [products, err] = await getProducts(true, context)
+
+  if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  return res.status(STATUS_CODES.OK).send(products)
+})
+app.get("/products/:id", async (req, res) => {
+  const { id } = req.params
+
+  if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  const [product, err] = await getProduct(id, context)
+
+  if (err) return res.sendStatus(STATUS_CODES.NOT_FOUND)
+
+  res.status(STATUS_CODES.OK).send(product)
+})
+app.post("/products", async (req, res) => {
+  const connectedAccountId = grabConnectedAccount(req)
+  const [newProduct, err] = await createProduct(
+    context,
+    productFactory().init(req.body),
+    connectedAccountId
+  )
+
+  if (err)
+    return res.status(STATUS_CODES.BAD_REQUEST).send({ error: err.message })
+
+  return res.status(STATUS_CODES.CREATED).send(newProduct)
+})
+app.delete("/products/:id", async (req, res) => {
+  const { id } = req.params
+
+  if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  if (await deleteProduct(id, context)) {
+    return res.sendStatus(STATUS_CODES.INTERNAL_SERVER_ERROR)
+  }
+
+  res.sendStatus(STATUS_CODES.OK)
+})
+
+const grabConnectedAccount = req => req.headers["x-account"]
+// Sku (Stripe) endpoints
+app.get("/skus", async (req, res) => {
+  const [skus, err] = await listSkus(context, grabConnectedAccount(req))
+
+  if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  return res.status(STATUS_CODES.OK).send(skus)
+})
+app.get("/skus/:id", async (req, res) => {
+  const { id } = req.params
+
+  if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  const [sku, err] = await getSku(context, grabConnectedAccount(req), id)
+
+  if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  return res.status(STATUS_CODES.OK).send(sku)
+})
+app.post("/skus", async (req, res) => {
+  const { productId, attributes, price } = req.body
+
+  const [sku, err] = await createSku(
+    context,
+    grabConnectedAccount(req),
+    productId,
+    attributes,
+    price,
+    "sek",
+    SKU_STATUS.IN_STOCK
+  )
+
+  if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  return res.status(STATUS_CODES.CREATED).send(sku)
+})
+app.put("/skus/:id", async (req, res) => {
+  const { id } = req.params
+  const { price, status } = req.body
+
+  if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  const [sku, err] = await updateSku(
+    context,
+    grabConnectedAccount(req),
+    id,
+    price,
+    status
+  )
+
+  if (err) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  return res.status(STATUS_CODES.ACCEPTED).send(sku)
+})
+app.delete("/skus/:id", async (req, res) => {
+  const { id } = req.params
+
+  if (!id) return res.sendStatus(STATUS_CODES.BAD_REQUEST)
+
+  const errStatus = await deleteSku(context, grabConnectedAccount(req), id)
+
+  if (errStatus)
+    return res.sendStatus(errStatus || STATUS_CODES.INTERNAL_SERVER_ERROR)
+
+  return res.sendStatus(STATUS_CODES.ACCEPTED)
+})
 
 exports.api = functions.region("europe-west1").https.onRequest(app)
 
